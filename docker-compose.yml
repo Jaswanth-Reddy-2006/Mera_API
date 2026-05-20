@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # 1. Private AI Gateway Service
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mera-ai-gateway
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5000}:${PORT:-5000}"
+    environment:
+      - PORT=${PORT:-5000}
+      - NODE_ENV=${NODE_ENV:-production}
+      # Dynamic API key from the host environment/.env file
+      - API_KEY=${API_KEY}
+      # Connects using Docker's internal DNS resolution to the 'ollama' service container
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
+      - OLLAMA_NUM_CTX=${OLLAMA_NUM_CTX:-8192}
+      - OLLAMA_TIMEOUT_MS=${OLLAMA_TIMEOUT_MS:-120000}
+      - MAX_PAYLOAD_SIZE=${MAX_PAYLOAD_SIZE:-5mb}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      - TRUST_PROXY=${TRUST_PROXY:-loopback}
+      - DEBUG=${DEBUG:-false}
+    depends_on:
+      - ollama
+    networks:
+      - ai-network
+
+  # 2. Local Ollama Server Service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: local-ollama-engine
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persists downloaded LLM weights on the host machine
+      - ollama-models:/root/.ollama
+    networks:
+      - ai-network
+    # --- GPU Acceleration Configuration ---
+    # To enable hardware-accelerated NVIDIA GPU processing on a VM with drivers and nvidia-container-toolkit installed:
+    # 1. Uncomment the deploy block below.
+    # 2. Run: docker compose up -d --build
+    #
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  ollama-models:
+    name: ollama_models_cache
+
+networks:
+  ai-network:
+    driver: bridge
